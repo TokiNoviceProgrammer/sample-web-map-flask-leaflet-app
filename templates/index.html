@@ -1,0 +1,40 @@
+<html>
+
+<head>
+    <script src="{{url_for('static', filename='jquery-2.2.2.min.js')}}"></script>
+    <script src="{{url_for('static', filename='leaflet/leaflet.js')}}"></script>
+    <script src="{{url_for('static', filename='wellknown.js')}}"></script>
+    <script src="{{url_for('static', filename='const.js')}}"></script>
+    <script src="{{url_for('static', filename='var.js')}}"></script>
+    <script src="{{url_for('static', filename='func.js')}}"></script>
+    <script src="{{url_for('static', filename='loading.js')}}"></script>
+
+    <link rel="stylesheet" href="{{url_for('static', filename='leaflet/leaflet.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='index.css')}}">
+</head>
+
+<body>
+    <div id="container">
+
+        <section id="header">
+            <h1>【Flask and Leaflet】sample web map application</h1>
+        </section>
+
+        <div id="colorSelectBox">
+            <span>色選択：</span>
+            <select id="colorSelect">
+                {% for c in color %}
+                <option value="{{c.color}}">{{c.color}}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button id="markerBtn" class="btn-push">マーカー</button>
+        <button id="centerPointBtn" class="btn-push">重心</button>
+        <button id="polylineBtn" class="btn-push">ルート</button>
+        <button id="initializeBtn" class="btn-push">layer削除</button>
+
+        <section id="mymap"></section>
+
+    </div>
+</body>
