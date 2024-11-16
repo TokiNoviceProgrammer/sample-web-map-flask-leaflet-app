@@ -19,38 +19,44 @@ function makeMap() {
  * 初回データ読み込み（ポリゴンの取得と取り込み）
  */
 function initRenderData() {
-    // バックエンドへ非同期通信
-    $.getJSON("/get_polygon", function (obj) {
-        // ポリゴンの重心保持用リスト
-        polygonCenter = []
-        // ポリゴンをリストに詰める
-        wktList = obj.data.map(function (arr) {
-            // ポリゴンの重心を保持
-            let lat = arr[4];
-            let lon = arr[5];
-            polygonCenter.push([lat, lon])
-            // 取得データ分を変換・返却し、保持
-            return L.geoJson(wellknown.parse(arr[3]), {
-                id: arr[0],
-                nm: arr[1],
-                fillColor: arr[2],
-                lat: lat,
-                lon: lon,
-                // polygonのスタイル
-                color: "black",
-                fill: true,
-                opacity: 1,
-                weight: 1,
-                fillOpacity: 0.6,
-                onEachFeature: onEachFeature
+    fetch("/get_polygon")
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error("Failed to fetch polygons");
+            }
+            return response.json();
+        })
+        .then((obj) => {
+            polygonCenter = []; // ポリゴンの重心保持用リスト
+            wktList = obj.data.map((item) => {
+                const polygon = Polygon.fromJSON(item);
+                polygonCenter.push([polygon.lat, polygon.lon]);
+
+                return L.geoJson(wellknown.parse(polygon.polygon), {
+                    id: polygon.id,
+                    nm: polygon.name,
+                    fillColor: polygon.color,
+                    lat: polygon.lat,
+                    lon: polygon.lon,
+                    // polygonのスタイル
+                    color: "black",
+                    fill: true,
+                    opacity: 1,
+                    weight: 1,
+                    fillOpacity: 0.6,
+                    onEachFeature: onEachFeature,
+                });
             });
+        })
+        .catch((error) => {
+            console.error("Error during polygon data fetch:", error.message);
+        })
+        .finally(() => {
+            // ポリゴンリストをレイヤーグループとして保持
+            polygonLayer = L.layerGroup(wktList);
+            // レイヤーグループを地図に設定
+            mymap.addLayer(polygonLayer);
         });
-    }).always(function () {
-        // ポリゴンリストをレイヤーグループとして保持
-        polygonLayer = L.layerGroup(wktList);
-        // レイヤーグループを地図に設定
-        mymap.addLayer(polygonLayer);
-    });
 }
 
 /**
@@ -77,29 +83,38 @@ function onEachFeature(feature, layer) {
 function whenClick(e) {
     // ポリゴン色変更
     this.setStyle({
-        'fillColor': selectColor
+        fillColor: selectColor,
     });
+
     // クリックされたターゲットの区域情報を取得
-    let targetKuikiInfo = e.target;
-    // 更新データ作成
-    let id = targetKuikiInfo.defaultOptions.id;
-    let color = selectColor;
-    let updateData = { id: id, color: color };
-    // JSON 形式への変換
-    let updateDataJSON = JSON.stringify(updateData);
+    const target = e.target;
+    const updateData = {
+        id: target.defaultOptions.id,                       // ポリゴンID
+        nm: target.defaultOptions.nm || "",                 // ポリゴン名
+        color: selectColor,                                 // 更新後の色
+        polygon: JSON.stringify(target.feature.geometry),   // ポリゴンのGeoJSON
+        lat: target.defaultOptions.lat,                     // 重心の緯度
+        lon: target.defaultOptions.lon,                     // 重心の経度
+    };
+
     // サーバーに送信
-    $.ajax({
-        type: "POST",
-        url: "/color_change",
-        data: updateDataJSON,
-        contentType: "application/json",
-        success: function () {
+    fetch("/color_change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+    })
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error("Failed to update color");
+            }
+            return response.json();
+        })
+        .then(() => {
             console.log("色変更 成功");
-        },
-        error: function () {
-            console.log("色変更 失敗");
-        }
-    });
+        })
+        .catch((error) => {
+            console.error("色変更 失敗:", error.message);
+        });
 }
 
 /**
@@ -107,6 +122,7 @@ function whenClick(e) {
  * @param {L.LeafletMouseEvent} e - Leafletのマウスイベントオブジェクト
  */
 function whenDblclick(e) {
+    // 必要に応じて追加実装
 }
 
 /**
@@ -115,10 +131,10 @@ function whenDblclick(e) {
  */
 function whenMouseover(e) {
     // 現在の濃淡を取得
-    beforFillOpacity = e.target.defaultOptions.fillOpacity
+    beforeFillOpacity = e.target.defaultOptions.fillOpacity;
     // 濃淡変更
     this.setStyle({
-        'fillOpacity': 1.0
+        fillOpacity: 1.0,
     });
 }
 
@@ -129,7 +145,7 @@ function whenMouseover(e) {
 function whenMouseout(e) {
     // 濃淡変更
     this.setStyle({
-        'fillOpacity': beforFillOpacity
+        fillOpacity: beforeFillOpacity,
     });
 }
 
@@ -137,11 +153,7 @@ function whenMouseout(e) {
  * マーカーレイヤー作成
  */
 function makeMarkerLayer() {
-    var markerList = [];
-    for (let c of polygonCenter) {
-        marker = L.marker(c);
-        markerList.push(marker);
-    }
+    const markerList = polygonCenter.map((c) => L.marker(c));
     markerLayer = L.layerGroup(markerList);
 }
 
@@ -149,20 +161,15 @@ function makeMarkerLayer() {
  * 重心点レイヤー作成
  */
 function makeCenterPointLayer() {
-    var centerPointList = [];
-    // 重心点の設定
-    let geojsonMarkerOptions = {
+    const geojsonMarkerOptions = {
         radius: 3,
         fillColor: "black",
         color: "black",
         weight: 1,
         opacity: 1,
-        fillOpacity: 0.8
+        fillOpacity: 0.8,
     };
-    for (let c of polygonCenter) {
-        centerPoint = L.circleMarker(c, geojsonMarkerOptions);
-        centerPointList.push(centerPoint);
-    }
+    const centerPointList = polygonCenter.map((c) => L.circleMarker(c, geojsonMarkerOptions));
     centerPointLayer = L.layerGroup(centerPointList);
 }
 
@@ -170,13 +177,11 @@ function makeCenterPointLayer() {
  * 訪問順レイヤー作成
  */
 function makePolylineLayer() {
-    polylineLayer = L.polyline(
-        polygonCenter,
-        {
-            "color": "red",
-            "weight": 1,
-            "opacity": 0.8
-        })
+    polylineLayer = L.polyline(polygonCenter, {
+        color: "red",
+        weight: 1,
+        opacity: 0.8,
+    });
 }
 
 /**
@@ -190,16 +195,16 @@ function initialize() {
     // マーカーレイヤー削除
     if (markerBtnFlg) {
         mymap.removeLayer(markerLayer);
-        markerBtnFlg = false
+        markerBtnFlg = false;
     }
     // 重心点レイヤー削除
     if (centerPointBtnFlg) {
         mymap.removeLayer(centerPointLayer);
-        centerPointBtnFlg = false
+        centerPointBtnFlg = false;
     }
     // 訪問順レイヤー削除
     if (polylineBtnFlg) {
         mymap.removeLayer(polylineLayer);
-        polylineBtnFlg = false
+        polylineBtnFlg = false;
     }
 }

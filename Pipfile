@@ -9,6 +9,8 @@ flask-sqlalchemy = "*"
 pandas = "*"
 isort = "*"
 black = "*"
+dataclasses-json = "*"
+marshmallow = "*"
 
 [dev-packages]
 
