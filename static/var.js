@@ -56,4 +56,4 @@ let polylineBtnFlg = false;
 /**
  * ポリゴン濃淡取得用
  */
-let beforFillOpacity;
+let beforeFillOpacity;
